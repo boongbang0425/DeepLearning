@@ -1,0 +1,43 @@
+name: study-bot
+on:
+  schedule:
+    - cron: "15 * * * *"   # 매시 : 개인 공부 순위, 최근 활동
+    - cron: "30 8 * * 1"   # 월 17:30 KST : open (지연 대비 18:00 전 완료)
+    - cron: "0 11 * * 1"   # 월 20:00 KST : close
+    - cron: "0 13 * * 1"   # 월 22:00 KST : rollover
+    - cron: "0 11 * * 0"   # 일 20:00 KST : remind
+  push:
+    paths: ["week*/**"]
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "open | close | rollover | remind | activity"
+        required: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install requests
+      - env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          RECORD_DB: ${{ secrets.RECORD_DB }}
+          MEMBER_DB: ${{ secrets.MEMBER_DB }}
+          STUDY_DB: ${{ secrets.STUDY_DB }}
+          DASHBOARD: ${{ secrets.DASHBOARD }}
+          CURRICULUM_DB: ${{ secrets.CURRICULUM_DB }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          case "${{ github.event_name }}:${{ github.event.schedule }}" in
+            push:*)              python scripts/study_bot.py share $(git diff --name-only ${{ github.event.before }} ${{ github.sha }}) ;;
+            workflow_dispatch:*) python scripts/study_bot.py ${{ github.event.inputs.job }} ;;
+            *"15 * * * *")       python scripts/study_bot.py activity ;;
+            *"30 8 * * 1")       python scripts/study_bot.py open ;;
+            *"0 11 * * 1")       python scripts/study_bot.py close ;;
+            *"0 13 * * 1")       python scripts/study_bot.py rollover ;;
+            *"0 11 * * 0")       python scripts/study_bot.py remind ;;
+          esac
